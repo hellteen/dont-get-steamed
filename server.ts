@@ -1,0 +1,67 @@
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { createServer as createViteServer } from 'vite';
+
+import authRoutes from './server/routes/auth';
+import surveyRoutes from './server/routes/survey';
+import trackerRoutes from './server/routes/tracker';
+import feedbackRoutes from './server/routes/feedback';
+import adminRoutes from './server/routes/admin';
+import { initMsSql } from './server/mssql';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+async function startServer() {
+  const app = express();
+  const PORT = 3000;
+
+  // Attempt connection to user's MS SQL Server on port 1433 (with safe fallback)
+  initMsSql().catch(() => {});
+
+  // Middlewares
+  app.use(cors());
+  app.use(express.json());
+
+  // Mount API routes FIRST
+  app.use('/api/auth', authRoutes);
+  app.use('/api/survey', surveyRoutes);
+  app.use('/api/tracker', trackerRoutes);
+  app.use('/api/feedback', feedbackRoutes);
+  app.use('/api/admin', adminRoutes);
+
+  // Health / test route
+  app.get('/api/test', (_req, res) => {
+    res.json({
+      status: 'ok',
+      message: 'Анти-Вейп Трекер СибГИУ (25 дней) API работает штатно',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // Vite middleware in dev or static dist in production
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (_req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`⚡ Сервер Анти-Вейп Трекера СибГИУ запущен на порту ${PORT}`);
+    console.log(`🔗 URL: http://0.0.0.0:${PORT}`);
+  });
+}
+
+startServer().catch((err) => {
+  console.error('Fatal server startup error:', err);
+});
