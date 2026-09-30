@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 
 import authRoutes from './server/routes/auth';
@@ -11,12 +10,9 @@ import feedbackRoutes from './server/routes/feedback';
 import adminRoutes from './server/routes/admin';
 import { initMsSql } from './server/mssql';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
   // Attempt connection to user's MS SQL Server on port 1433 (with safe fallback)
   initMsSql().catch(() => {});
@@ -42,7 +38,8 @@ async function startServer() {
   });
 
   // Vite middleware in dev or static dist in production
-  if (process.env.NODE_ENV !== 'production') {
+  const isProduction = process.env.NODE_ENV === 'production' || (process.argv[1] && process.argv[1].endsWith('.cjs'));
+  if (!isProduction) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -57,8 +54,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`⚡ Сервер Анти-Вейп Трекера СибГИУ запущен на порту ${PORT}`);
-    console.log(`🔗 URL: http://0.0.0.0:${PORT}`);
+    console.log(`⚡ Сервер запущен на порту ${PORT}`);
   });
 }
 
