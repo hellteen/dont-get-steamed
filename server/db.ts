@@ -13,7 +13,6 @@ interface DatabaseSchema {
 const DB_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DB_DIR, 'db.json');
 
-// Predefined SibSIU Groups
 export const SIBSIU_GROUPS = [
   { id: 1, name: 'ПИМЦ-262', department: 'Прикладная информатика' },
   { id: 2, name: 'ПИТЭ-26', department: 'Прикладная информатика в экономике' },
@@ -33,7 +32,7 @@ function seedDatabase(): DatabaseSchema {
       id_group: 1,
       group_name: 'Администрация',
       course: 1,
-      id_level: 2, // Admin (id_level = 2, вход: имя 1, фамилия 1, курс 1)
+      id_level: 2,
       created_at: new Date().toISOString(),
     },
   ];
@@ -58,15 +57,18 @@ class Database {
 
     try {
       const { Pool } = await import('pg');
+      const isInternal = dbUrl.includes('dpg-') && !dbUrl.includes('.render.com');
+      const isLocal = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
+      const sslConfig = isInternal || isLocal ? false : { rejectUnauthorized: false };
+
       this.pgPool = new Pool({
         connectionString: dbUrl,
-        ssl: dbUrl.includes('localhost') ? false : { rejectUnauthorized: false },
+        ssl: sslConfig,
+        connectionTimeoutMillis: 5000,
       });
 
-      // Verify connection
       await this.pgPool.query('SELECT 1');
 
-      // Create permanent storage table
       await this.pgPool.query(`
         CREATE TABLE IF NOT EXISTS nezaparsya_store (
           key VARCHAR(50) PRIMARY KEY,
@@ -139,7 +141,6 @@ class Database {
     this.syncToPostgres().catch(() => {});
   }
 
-  // --- User Operations ---
   public findUser(firstName: string, lastName: string, idGroup: number): User | undefined {
     return this.data.users.find(
       (u) =>
@@ -184,7 +185,6 @@ class Database {
     return newUser;
   }
 
-  // --- Anket Operations ---
   public getAnketByUserId(userId: number): AnketRecord | undefined {
     return this.data.ankets.find((a) => a.id_user === userId);
   }
@@ -212,7 +212,6 @@ class Database {
     }
   }
 
-  // --- Tracker Operations ---
   public getTrackerRecords(userId: number): TrackerRecord[] {
     return this.data.trackers
       .filter((t) => t.user_id === userId)
@@ -240,7 +239,6 @@ class Database {
     const now = new Date();
     const todayDateStr = clientDate || now.toISOString().split('T')[0];
 
-    // Enforce 1 check-in per calendar day: cannot skip days in a single sitting
     if (userRecords.length > 0) {
       const lastRecord = userRecords[userRecords.length - 1];
       const lastDateStr = lastRecord.client_date || new Date(lastRecord.marked_at).toISOString().split('T')[0];
@@ -272,7 +270,6 @@ class Database {
     this.save();
   }
 
-  // --- Feedback Operations ---
   public saveFeedback(userId: number, message: string): FeedbackRecord {
     const user = this.getUserById(userId);
     const records = this.getTrackerRecords(userId);
@@ -301,12 +298,10 @@ class Database {
     return [...this.data.feedbacks].reverse();
   }
 
-  // --- Admin Analytics ---
   public getAdminStats(): AdminStats {
     const students = this.data.users.filter((u) => u.id_level === 1);
     const completedSurveys = this.data.ankets.length;
 
-    // Trackers
     const userTrackerCounts = new Map<number, { total: number; success: number; fails: number }>();
     this.data.trackers.forEach((t) => {
       const current = userTrackerCounts.get(t.user_id) || { total: 0, success: 0, fails: 0 };
@@ -332,7 +327,6 @@ class Database {
 
     const successRate = totalCheckins > 0 ? Math.round((totalSuccess / totalCheckins) * 100) : 100;
 
-    // Group Summary
     const groupsMap = new Map<string, { count: number; completedSurvey: number; totalDays: number }>();
     students.forEach((s) => {
       const gName = s.group_name || 'Не указана';
@@ -353,7 +347,6 @@ class Database {
       avgDaysCompleted: val.count > 0 ? Math.round((val.totalDays / val.count) * 10) / 10 : 0,
     }));
 
-    // Question stats (q1 to q12)
     const questionStats: AdminStats['questionStats'] = [];
     for (let i = 1; i <= 12; i++) {
       const qKey = `q${i}`;
@@ -394,33 +387,13 @@ class Database {
     };
   }
 
-  // --- Export utilities ---
   public exportExcelAnketsBuffer(): Buffer {
     const wb = XLSX.utils.book_new();
 
-    const questionLabels = [
-      'q1: Возраст',
-      'q2: Возраст начала парения',
-      'q3: Стаж парения',
-      'q4: Частота использования',
-      'q5: Причины начала',
-      'q6: Ситуации курения',
-      'q7: Ощущения без вейпа',
-      'q8: Оценка вреда',
-      'q9: Опыт отказа',
-      'q10: Главные трудности',
-      'q11: Отношение близких',
-      'q12: Готовность к участию в трекере',
-    ];
-
     const headers = [
-      'ID студента',
-      'Имя',
-      'Фамилия',
-      'Группа',
-      'Курс',
-      'Дата и время прохождения',
-      ...questionLabels,
+      'ID студента', 'Имя', 'Фамилия', 'Группа', 'Курс', 'Дата прохождения',
+      'Вопрос 1', 'Вопрос 2', 'Вопрос 3', 'Вопрос 4', 'Вопрос 5', 'Вопрос 6',
+      'Вопрос 7', 'Вопрос 8', 'Вопрос 9', 'Вопрос 10', 'Вопрос 11', 'Вопрос 12'
     ];
 
     const dataRows = this.data.ankets.map((a) => {
@@ -440,25 +413,13 @@ class Database {
     });
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-
-    ws['!cols'] = [
-      { wch: 14 },
-      { wch: 16 },
-      { wch: 16 },
-      { wch: 16 },
-      { wch: 8 },
-      { wch: 22 },
-      ...questionLabels.map(() => ({ wch: 32 })),
-    ];
-
-    XLSX.utils.book_append_sheet(wb, ws, 'Анкеты студентов (q1-q12)');
-
+    XLSX.utils.book_append_sheet(wb, ws, 'Анкеты');
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
   }
 
   public exportExcelFeedbacksBuffer(): Buffer {
     const wb = XLSX.utils.book_new();
-    const headers = ['ID отзыва', 'Студент', 'Группа', 'Курс', 'Чистых дней', 'Дней со срывами', 'Дата сдачи', 'Отзыв о программе'];
+    const headers = ['ID', 'Студент', 'Группа', 'Курс', 'Чистых дней', 'Срывов', 'Дата', 'Отзыв'];
     const dataRows = this.data.feedbacks.map((f) => [
       f.id,
       f.student_name,
@@ -470,8 +431,7 @@ class Database {
       f.message,
     ]);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-    ws['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 16 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 22 }, { wch: 60 }];
-    XLSX.utils.book_append_sheet(wb, ws, 'Отзывы студентов');
+    XLSX.utils.book_append_sheet(wb, ws, 'Отзывы');
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
   }
 
@@ -480,31 +440,10 @@ class Database {
   }
 
   public exportCsvSurveys(): string {
-    const questionLabels = [
-      'q1: Возраст',
-      'q2: Возраст начала парения',
-      'q3: Стаж парения',
-      'q4: Частота использования',
-      'q5: Причины начала',
-      'q6: Ситуации курения',
-      'q7: Ощущения без вейпа',
-      'q8: Оценка вреда',
-      'q9: Опыт отказа',
-      'q10: Главные трудности',
-      'q11: Отношение близких',
-      'q12: Готовность к участию в трекере',
-    ];
-
     const headers = [
-      'id_user',
-      'Имя',
-      'Фамилия',
-      'Группа',
-      'Курс',
-      'Дата прохождения',
-      ...questionLabels,
+      'id_user', 'Имя', 'Фамилия', 'Группа', 'Курс', 'Дата',
+      'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'q11', 'q12'
     ];
-
     const rows = this.data.ankets.map((a) => {
       const user = this.getUserById(a.id_user);
       const row = [
@@ -516,12 +455,10 @@ class Database {
         `"${new Date(a.submitted_at).toLocaleString('ru-RU')}"`,
       ];
       for (let i = 1; i <= 12; i++) {
-        const ans = (a.answers[`q${i}`] || '').replace(/"/g, '""');
-        row.push(`"${ans}"`);
+        row.push(`"${(a.answers[`q${i}`] || '').replace(/"/g, '""')}"`);
       }
       return row.join(';');
     });
-
     return '\uFEFF' + [headers.join(';'), ...rows].join('\r\n');
   }
 
