@@ -34,196 +34,75 @@ function seedDatabase(): DatabaseSchema {
       group_name: 'Администрация',
       course: 1,
       id_level: 2, // Admin (id_level = 2, вход: имя 1, фамилия 1, курс 1)
-      created_at: new Date(Date.now() - 30 * 86400000).toISOString(),
-    },
-    {
-      id: 2,
-      first_name: 'Артем',
-      last_name: 'Волков',
-      id_group: 1,
-      group_name: 'ПИМЦ-262',
-      course: 2,
-      id_level: 1,
-      created_at: new Date(Date.now() - 26 * 86400000).toISOString(),
-    },
-    {
-      id: 3,
-      first_name: 'София',
-      last_name: 'Морозова',
-      id_group: 3,
-      group_name: 'ПИС-26',
-      course: 1,
-      id_level: 1,
-      created_at: new Date(Date.now() - 20 * 86400000).toISOString(),
-    },
-    {
-      id: 4,
-      first_name: 'Илья',
-      last_name: 'Кузнецов',
-      id_group: 2,
-      group_name: 'ПИТЭ-26',
-      course: 3,
-      id_level: 1,
-      created_at: new Date(Date.now() - 15 * 86400000).toISOString(),
-    },
-    {
-      id: 5,
-      first_name: 'Дарья',
-      last_name: 'Смирнова',
-      id_group: 5,
-      group_name: 'ИС-21',
-      course: 2,
-      id_level: 1,
-      created_at: new Date(Date.now() - 8 * 86400000).toISOString(),
+      created_at: new Date().toISOString(),
     },
   ];
 
-  const ankets: AnketRecord[] = [
-    {
-      id: 1,
-      id_user: 2,
-      submitted_at: new Date(Date.now() - 26 * 86400000).toISOString(),
-      answers: {
-        q1: '19–20',
-        q2: '14–16 лет',
-        q3: '1–3 года',
-        q4: 'Каждый день',
-        q5: 'За компанию с друзьями; Из-за стресса / учёбы',
-        q6: 'На переменах между парами; Когда нервничаю',
-        q7: 'Раздражение',
-        q8: 'Скорее вредно',
-        q9: 'Пробовал(а) несколько раз',
-        q10: 'Зависимость / ломка; Стресс',
-        q11: 'Отрицательно, но не запрещают',
-        q12: 'Точно участвовал(а)',
-      },
-    },
-    {
-      id: 2,
-      id_user: 3,
-      submitted_at: new Date(Date.now() - 20 * 86400000).toISOString(),
-      answers: {
-        q1: '17–18',
-        q2: '17–18 лет',
-        q3: 'От месяца до полугода',
-        q4: 'Несколько раз в день',
-        q5: 'Просто стало интересно',
-        q6: 'В компании друзей; Перед сном',
-        q7: 'Лёгкое желание',
-        q8: 'Скорее вредно',
-        q9: 'Бросаю прямо сейчас',
-        q10: 'Компания друзей',
-        q11: 'Ругают, просят бросить',
-        q12: 'Скорее да, если не будет давления',
-      },
-    },
-    {
-      id: 3,
-      id_user: 4,
-      submitted_at: new Date(Date.now() - 15 * 86400000).toISOString(),
-      answers: {
-        q1: '21–23',
-        q2: '17–18 лет',
-        q3: 'Больше 3 лет',
-        q4: 'Практически не выпускаю из рук',
-        q5: 'Из-за стресса / учёбы',
-        q6: 'Во время учёбы / зубрёжки; На переменах между парами',
-        q7: 'Сильную тягу, не могу сосредоточиться',
-        q8: 'Нет, это так же опасно',
-        q9: 'Пробовал(а) несколько раз',
-        q10: 'Зависимость / ломка; Стресс',
-        q11: 'Не знают',
-        q12: 'Точно участвовал(а)',
-      },
-    },
-    {
-      id: 4,
-      id_user: 5,
-      submitted_at: new Date(Date.now() - 8 * 86400000).toISOString(),
-      answers: {
-        q1: '19–20',
-        q2: '14–16 лет',
-        q3: 'От полугода до года',
-        q4: 'Несколько раз в день',
-        q5: 'За компанию с друзьями',
-        q6: 'На переменах между парами; Просто по привычке',
-        q7: 'Тревогу',
-        q8: 'Скорее вредно',
-        q9: 'Пробовал(а) один раз',
-        q10: 'Компания друзей; Не знаю, с чего начать',
-        q11: 'Отрицательно, но не запрещают',
-        q12: 'Скорее да, если не будет давления',
-      },
-    },
-  ];
-
-  // Fill tracker records for Артем (25/25 completed, 1 relapse)
-  const trackers: TrackerRecord[] = [];
-  for (let day = 1; day <= 25; day++) {
-    trackers.push({
-      id: trackers.length + 1,
-      user_id: 2,
-      date_number: day,
-      status: day === 15 ? 'Срыв' : 'Успех',
-      marked_at: new Date(Date.now() - (26 - day) * 86400000).toISOString(),
-    });
-  }
-
-  // Fill tracker records for София (19 days completed, 0 relapses)
-  for (let day = 1; day <= 19; day++) {
-    trackers.push({
-      id: trackers.length + 1,
-      user_id: 3,
-      date_number: day,
-      status: 'Успех',
-      marked_at: new Date(Date.now() - (20 - day) * 86400000).toISOString(),
-    });
-  }
-
-  // Fill tracker records for Илья (14 days, 2 relapses)
-  for (let day = 1; day <= 14; day++) {
-    trackers.push({
-      id: trackers.length + 1,
-      user_id: 4,
-      date_number: day,
-      status: day === 3 || day === 9 ? 'Срыв' : 'Успех',
-      marked_at: new Date(Date.now() - (15 - day) * 86400000).toISOString(),
-    });
-  }
-
-  // Fill tracker records for Дарья (7 days, clean)
-  for (let day = 1; day <= 7; day++) {
-    trackers.push({
-      id: trackers.length + 1,
-      user_id: 5,
-      date_number: day,
-      status: 'Успех',
-      marked_at: new Date(Date.now() - (8 - day) * 86400000).toISOString(),
-    });
-  }
-
-  const feedbacks: FeedbackRecord[] = [
-    {
-      id: 1,
-      user_id: 2,
-      student_name: 'Артем Волков',
-      group_name: 'ПИМЦ-262',
-      course: 2,
-      message: 'Очень помогло то, что срыв на 15-й день не сжег весь стрик! Раньше во всех приложениях сразу сгорал весь прогресс и опускались руки. Тут я просто понял, что триггером была сессия, собрался и дошел до 25 дня. Дышать стало в разы легче.',
-      created_at: new Date(Date.now() - 1 * 86400000).toISOString(),
-      clean_days: 24,
-      relapse_days: 1,
-    },
-  ];
-
-  return { users, ankets, trackers, feedbacks };
+  return { users, ankets: [], trackers: [], feedbacks: [] };
 }
 
 class Database {
   private data: DatabaseSchema;
+  private pgPool: any = null;
 
   constructor() {
     this.data = this.load();
+  }
+
+  public async initPostgres(): Promise<boolean> {
+    const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+    if (!dbUrl) {
+      console.log('ℹ️ DATABASE_URL не задан — используется локальная файловая БД data/db.json.');
+      return false;
+    }
+
+    try {
+      const { Pool } = await import('pg');
+      this.pgPool = new Pool({
+        connectionString: dbUrl,
+        ssl: dbUrl.includes('localhost') ? false : { rejectUnauthorized: false },
+      });
+
+      // Verify connection
+      await this.pgPool.query('SELECT 1');
+
+      // Create permanent storage table
+      await this.pgPool.query(`
+        CREATE TABLE IF NOT EXISTS nezaparsya_store (
+          key VARCHAR(50) PRIMARY KEY,
+          data JSONB NOT NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      const res = await this.pgPool.query('SELECT data FROM nezaparsya_store WHERE key = $1', ['db_state']);
+      if (res.rows.length > 0 && res.rows[0].data) {
+        this.data = res.rows[0].data;
+        this.saveToDisk();
+        console.log(`✅ [PostgreSQL Cloud] База данных успешно подключена! Пользователей: ${this.data.users.length}, анкет: ${this.data.ankets.length}`);
+      } else {
+        await this.syncToPostgres();
+        console.log('✅ [PostgreSQL Cloud] База данных успешно подключена и инициализирована.');
+      }
+      return true;
+    } catch (err: any) {
+      console.error('⚠️ Ошибка подключения к PostgreSQL:', err.message);
+      return false;
+    }
+  }
+
+  private async syncToPostgres() {
+    if (!this.pgPool) return;
+    try {
+      await this.pgPool.query(
+        `INSERT INTO nezaparsya_store (key, data, updated_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE SET data = $2, updated_at = NOW()`,
+        ['db_state', JSON.stringify(this.data)]
+      );
+    } catch (err: any) {
+      console.error('⚠️ Ошибка сохранения в PostgreSQL:', err.message);
+    }
   }
 
   private load(): DatabaseSchema {
@@ -243,7 +122,7 @@ class Database {
     return seed;
   }
 
-  private save(dataToSave?: DatabaseSchema) {
+  private saveToDisk(dataToSave?: DatabaseSchema) {
     try {
       if (!fs.existsSync(DB_DIR)) {
         fs.mkdirSync(DB_DIR, { recursive: true });
@@ -253,6 +132,11 @@ class Database {
     } catch (err) {
       console.error('Error writing to database file:', err);
     }
+  }
+
+  private save(dataToSave?: DatabaseSchema) {
+    this.saveToDisk(dataToSave);
+    this.syncToPostgres().catch(() => {});
   }
 
   // --- User Operations ---
@@ -478,7 +362,6 @@ class Database {
       this.data.ankets.forEach((a) => {
         const ans = a.answers[qKey];
         if (ans) {
-          // split multiple choices separated by ';'
           const parts = ans.split(';').map((p) => p.trim());
           parts.forEach((p) => {
             if (p) {
@@ -558,7 +441,6 @@ class Database {
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
 
-    // Set readable column widths in Excel
     ws['!cols'] = [
       { wch: 14 },
       { wch: 16 },
@@ -658,9 +540,7 @@ class Database {
     return '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\n');
   }
 
-  // Clear all student test data, questionnaires, trackers, and feedbacks, keeping only admin accounts
   public clearDatabase(): void {
-    // Retain only admin users (id_level === 2)
     let admins = this.data.users.filter((u) => u.id_level === 2);
     if (admins.length === 0) {
       admins = [
