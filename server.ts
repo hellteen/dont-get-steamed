@@ -18,13 +18,11 @@ async function startServer() {
   // Attempt connection to user's MS SQL Server on port 1433 (with safe fallback)
   initMsSql().catch(() => {});
 
-  // Initialize Cloud PostgreSQL if DATABASE_URL is configured (Render, Supabase, Neon)
+  // Initialize Cloud PostgreSQL if DATABASE_URL is configured (non-blocking)
   if (db && typeof (db as any).initPostgres === 'function') {
-    try {
-      await db.initPostgres();
-    } catch (e) {
-      console.warn('PostgreSQL initialization warning:', e);
-    }
+    db.initPostgres().catch((e: any) => {
+      console.warn('PostgreSQL initialization warning:', e?.message || e);
+    });
   }
 
   // Middlewares
