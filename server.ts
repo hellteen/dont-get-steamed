@@ -19,7 +19,13 @@ async function startServer() {
   initMsSql().catch(() => {});
 
   // Initialize Cloud PostgreSQL if DATABASE_URL is configured (Render, Supabase, Neon)
-  await db.initPostgres().catch(() => {});
+  if (db && typeof (db as any).initPostgres === 'function') {
+    try {
+      await db.initPostgres();
+    } catch (e) {
+      console.warn('PostgreSQL initialization warning:', e);
+    }
+  }
 
   // Middlewares
   app.use(cors());
@@ -58,7 +64,8 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`⚡ Сервер запущен на порту ${PORT}`);
+    console.log(`⚡ Сервер Анти-Вейп Трекера СибГИУ запущен на порту ${PORT}`);
+    console.log(`🔗 URL: http://0.0.0.0:${PORT}`);
   });
 }
 
