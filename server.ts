@@ -9,6 +9,7 @@ import trackerRoutes from './server/routes/tracker';
 import feedbackRoutes from './server/routes/feedback';
 import adminRoutes from './server/routes/admin';
 import { initMsSql } from './server/mssql';
+import { db } from './server/db';
 
 async function startServer() {
   const app = express();
@@ -16,6 +17,9 @@ async function startServer() {
 
   // Attempt connection to user's MS SQL Server on port 1433 (with safe fallback)
   initMsSql().catch(() => {});
+
+  // Initialize Cloud PostgreSQL if DATABASE_URL is configured (Render, Supabase, Neon)
+  await db.initPostgres().catch(() => {});
 
   // Middlewares
   app.use(cors());
