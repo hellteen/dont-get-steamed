@@ -86,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
                   {user.id_level === 2 ? 'Админ' : user.first_name}
                 </span>
                 <span className="text-[10px] text-[#16f0c2] font-mono-code leading-none">
-                  {user.id_level === 2 ? 'Панель' : user.group_name}
+                  {user.id_level === 2 ? 'Панель' : (user.group_name || '').replace(/\s*\(.*?\)/g, '').trim()}
                 </span>
               </div>
 
