@@ -13,14 +13,20 @@ interface DatabaseSchema {
 const DB_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DB_DIR, 'db.json');
 
+export function cleanGroupName(name?: string | null): string {
+  if (!name) return '';
+  return name.replace(/\s*\(.*?\)/g, '').trim();
+}
+
+// Predefined SibSIU Groups
 export const SIBSIU_GROUPS = [
-  { id: 1, name: 'ПИМЦ-262', department: 'Прикладная информатика' },
-  { id: 2, name: 'ПИТЭ-26', department: 'Прикладная информатика в экономике' },
-  { id: 3, name: 'ПИС-26', department: 'Программная инженерия' },
-  { id: 4, name: 'ПИСЭ-26', department: 'Программная инженерия' },
-  { id: 5, name: 'ИС-21', department: 'Информационные системы' },
-  { id: 6, name: 'ИС-22', department: 'Информационные системы' },
-  { id: 7, name: 'Менеджмент', department: 'Экономика и управление' },
+  { id: 1, name: 'ПИМЦ-262' },
+  { id: 2, name: 'ПИТЭ-26' },
+  { id: 3, name: 'ПИС-26' },
+  { id: 4, name: 'ПИСЭ-26' },
+  { id: 5, name: 'ИС-21' },
+  { id: 6, name: 'ИС-22' },
+  { id: 7, name: 'Менеджмент' },
 ];
 
 function seedDatabase(): DatabaseSchema {
@@ -32,7 +38,7 @@ function seedDatabase(): DatabaseSchema {
       id_group: 1,
       group_name: 'Администрация',
       course: 1,
-      id_level: 2,
+      id_level: 2, // Admin (id_level = 2, вход: имя 1, фамилия 1, курс 1)
       created_at: new Date().toISOString(),
     },
   ];
@@ -67,8 +73,10 @@ class Database {
         connectionTimeoutMillis: 5000,
       });
 
+      // Verify connection with timeout
       await this.pgPool.query('SELECT 1');
 
+      // Create permanent storage table
       await this.pgPool.query(`
         CREATE TABLE IF NOT EXISTS nezaparsya_store (
           key VARCHAR(50) PRIMARY KEY,
@@ -80,6 +88,7 @@ class Database {
       const res = await this.pgPool.query('SELECT data FROM nezaparsya_store WHERE key = $1', ['db_state']);
       if (res.rows.length > 0 && res.rows[0].data) {
         this.data = res.rows[0].data;
+        this.sanitizeLegacyGroupNames();
         this.saveToDisk();
         console.log(`✅ [PostgreSQL Cloud] База данных успешно подключена! Пользователей: ${this.data.users.length}, анкет: ${this.data.ankets.length}`);
       } else {
@@ -90,6 +99,33 @@ class Database {
     } catch (err: any) {
       console.error('⚠️ Ошибка подключения к PostgreSQL:', err.message);
       return false;
+    }
+  }
+
+  private sanitizeLegacyGroupNames() {
+    if (!this.data || !Array.isArray(this.data.users)) return;
+    let modified = false;
+
+    for (const u of this.data.users) {
+      if (u.group_name && u.group_name.includes('(')) {
+        u.group_name = cleanGroupName(u.group_name);
+        modified = true;
+      }
+    }
+
+    if (Array.isArray(this.data.feedbacks)) {
+      for (const f of this.data.feedbacks) {
+        if (f.group_name && f.group_name.includes('(')) {
+          f.group_name = cleanGroupName(f.group_name);
+          modified = true;
+        }
+      }
+    }
+
+    if (modified) {
+      this.saveToDisk();
+      this.syncToPostgres().catch(() => {});
+      console.log('✨ [Database] Названия групп приведены к чистому виду (без скобок). Данные студентов сохранены.');
     }
   }
 
@@ -114,7 +150,10 @@ class Database {
       }
       if (fs.existsSync(DB_FILE)) {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
-        return JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        this.data = parsed;
+        this.sanitizeLegacyGroupNames();
+        return this.data;
       }
     } catch (err) {
       console.error('Error reading database file, resetting to initial seed:', err);
@@ -141,21 +180,33 @@ class Database {
     this.syncToPostgres().catch(() => {});
   }
 
+  // --- User Operations ---
   public findUser(firstName: string, lastName: string, idGroup: number): User | undefined {
-    return this.data.users.find(
+    const user = this.data.users.find(
       (u) =>
         u.first_name.trim().toLowerCase() === firstName.trim().toLowerCase() &&
         u.last_name.trim().toLowerCase() === lastName.trim().toLowerCase() &&
         u.id_group === idGroup
     );
+    if (user) {
+      user.group_name = cleanGroupName(user.group_name);
+    }
+    return user;
   }
 
   public getUserById(id: number): User | undefined {
-    return this.data.users.find((u) => u.id === id);
+    const user = this.data.users.find((u) => u.id === id);
+    if (user) {
+      user.group_name = cleanGroupName(user.group_name);
+    }
+    return user;
   }
 
   public getAllUsers(): User[] {
-    return this.data.users;
+    return this.data.users.map((u) => ({
+      ...u,
+      group_name: cleanGroupName(u.group_name),
+    }));
   }
 
   public createUser(params: {
@@ -174,7 +225,7 @@ class Database {
       first_name: params.firstName.trim(),
       last_name: params.lastName.trim(),
       id_group: params.idGroup,
-      group_name: params.groupName || defaultGroupName,
+      group_name: cleanGroupName(params.groupName || defaultGroupName),
       course: params.course,
       id_level: params.idLevel || 1,
       created_at: new Date().toISOString(),
@@ -185,6 +236,7 @@ class Database {
     return newUser;
   }
 
+  // --- Anket Operations ---
   public getAnketByUserId(userId: number): AnketRecord | undefined {
     return this.data.ankets.find((a) => a.id_user === userId);
   }
@@ -212,6 +264,7 @@ class Database {
     }
   }
 
+  // --- Tracker Operations ---
   public getTrackerRecords(userId: number): TrackerRecord[] {
     return this.data.trackers
       .filter((t) => t.user_id === userId)
@@ -239,6 +292,7 @@ class Database {
     const now = new Date();
     const todayDateStr = clientDate || now.toISOString().split('T')[0];
 
+    // Enforce 1 check-in per calendar day: cannot skip days in a single sitting
     if (userRecords.length > 0) {
       const lastRecord = userRecords[userRecords.length - 1];
       const lastDateStr = lastRecord.client_date || new Date(lastRecord.marked_at).toISOString().split('T')[0];
@@ -270,6 +324,7 @@ class Database {
     this.save();
   }
 
+  // --- Feedback Operations ---
   public saveFeedback(userId: number, message: string): FeedbackRecord {
     const user = this.getUserById(userId);
     const records = this.getTrackerRecords(userId);
@@ -281,7 +336,7 @@ class Database {
       id: nextId,
       user_id: userId,
       student_name: user ? `${user.first_name} ${user.last_name}` : 'Студент',
-      group_name: user ? user.group_name : 'СибГИУ',
+      group_name: user ? cleanGroupName(user.group_name) : 'СибГИУ',
       course: user ? user.course : 1,
       message: message.trim().slice(0, 400),
       created_at: new Date().toISOString(),
@@ -298,10 +353,12 @@ class Database {
     return [...this.data.feedbacks].reverse();
   }
 
+  // --- Admin Analytics ---
   public getAdminStats(): AdminStats {
     const students = this.data.users.filter((u) => u.id_level === 1);
     const completedSurveys = this.data.ankets.length;
 
+    // Trackers
     const userTrackerCounts = new Map<number, { total: number; success: number; fails: number }>();
     this.data.trackers.forEach((t) => {
       const current = userTrackerCounts.get(t.user_id) || { total: 0, success: 0, fails: 0 };
@@ -327,9 +384,10 @@ class Database {
 
     const successRate = totalCheckins > 0 ? Math.round((totalSuccess / totalCheckins) * 100) : 100;
 
+    // Group Summary
     const groupsMap = new Map<string, { count: number; completedSurvey: number; totalDays: number }>();
     students.forEach((s) => {
-      const gName = s.group_name || 'Не указана';
+      const gName = cleanGroupName(s.group_name) || 'Не указана';
       const cur = groupsMap.get(gName) || { count: 0, completedSurvey: 0, totalDays: 0 };
       cur.count += 1;
       if (this.data.ankets.some((a) => a.id_user === s.id)) {
@@ -347,6 +405,7 @@ class Database {
       avgDaysCompleted: val.count > 0 ? Math.round((val.totalDays / val.count) * 10) / 10 : 0,
     }));
 
+    // Question stats (q1 to q12)
     const questionStats: AdminStats['questionStats'] = [];
     for (let i = 1; i <= 12; i++) {
       const qKey = `q${i}`;
@@ -355,6 +414,7 @@ class Database {
       this.data.ankets.forEach((a) => {
         const ans = a.answers[qKey];
         if (ans) {
+          // split multiple choices separated by ';'
           const parts = ans.split(';').map((p) => p.trim());
           parts.forEach((p) => {
             if (p) {
@@ -387,13 +447,33 @@ class Database {
     };
   }
 
+  // --- Export utilities ---
   public exportExcelAnketsBuffer(): Buffer {
     const wb = XLSX.utils.book_new();
 
+    const questionLabels = [
+      'q1: Возраст',
+      'q2: Возраст начала парения',
+      'q3: Стаж парения',
+      'q4: Частота использования',
+      'q5: Причины начала',
+      'q6: Ситуации курения',
+      'q7: Ощущения без вейпа',
+      'q8: Оценка вреда',
+      'q9: Опыт отказа',
+      'q10: Главные трудности',
+      'q11: Отношение близких',
+      'q12: Готовность к участию в трекере',
+    ];
+
     const headers = [
-      'ID студента', 'Имя', 'Фамилия', 'Группа', 'Курс', 'Дата прохождения',
-      'Вопрос 1', 'Вопрос 2', 'Вопрос 3', 'Вопрос 4', 'Вопрос 5', 'Вопрос 6',
-      'Вопрос 7', 'Вопрос 8', 'Вопрос 9', 'Вопрос 10', 'Вопрос 11', 'Вопрос 12'
+      'ID студента',
+      'Имя',
+      'Фамилия',
+      'Группа',
+      'Курс',
+      'Дата и время прохождения',
+      ...questionLabels,
     ];
 
     const dataRows = this.data.ankets.map((a) => {
@@ -402,7 +482,7 @@ class Database {
         a.id_user,
         user?.first_name || '',
         user?.last_name || '',
-        user?.group_name || '',
+        cleanGroupName(user?.group_name) || '',
         user?.course || '',
         new Date(a.submitted_at).toLocaleString('ru-RU'),
       ];
@@ -413,17 +493,30 @@ class Database {
     });
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-    XLSX.utils.book_append_sheet(wb, ws, 'Анкеты');
+
+    // Set readable column widths in Excel
+    ws['!cols'] = [
+      { wch: 14 },
+      { wch: 16 },
+      { wch: 16 },
+      { wch: 16 },
+      { wch: 8 },
+      { wch: 22 },
+      ...questionLabels.map(() => ({ wch: 32 })),
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Анкеты студентов (q1-q12)');
+
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
   }
 
   public exportExcelFeedbacksBuffer(): Buffer {
     const wb = XLSX.utils.book_new();
-    const headers = ['ID', 'Студент', 'Группа', 'Курс', 'Чистых дней', 'Срывов', 'Дата', 'Отзыв'];
+    const headers = ['ID отзыва', 'Студент', 'Группа', 'Курс', 'Чистых дней', 'Дней со срывами', 'Дата сдачи', 'Отзыв о программе'];
     const dataRows = this.data.feedbacks.map((f) => [
       f.id,
       f.student_name,
-      f.group_name,
+      cleanGroupName(f.group_name),
       f.course,
       f.clean_days,
       f.relapse_days,
@@ -431,7 +524,8 @@ class Database {
       f.message,
     ]);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-    XLSX.utils.book_append_sheet(wb, ws, 'Отзывы');
+    ws['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 16 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 22 }, { wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Отзывы студентов');
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
   }
 
@@ -440,25 +534,48 @@ class Database {
   }
 
   public exportCsvSurveys(): string {
-    const headers = [
-      'id_user', 'Имя', 'Фамилия', 'Группа', 'Курс', 'Дата',
-      'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'q11', 'q12'
+    const questionLabels = [
+      'q1: Возраст',
+      'q2: Возраст начала парения',
+      'q3: Стаж парения',
+      'q4: Частота использования',
+      'q5: Причины начала',
+      'q6: Ситуации курения',
+      'q7: Ощущения без вейпа',
+      'q8: Оценка вреда',
+      'q9: Опыт отказа',
+      'q10: Главные трудности',
+      'q11: Отношение близких',
+      'q12: Готовность к участию в трекере',
     ];
+
+    const headers = [
+      'id_user',
+      'Имя',
+      'Фамилия',
+      'Группа',
+      'Курс',
+      'Дата прохождения',
+      ...questionLabels,
+    ];
+
     const rows = this.data.ankets.map((a) => {
       const user = this.getUserById(a.id_user);
       const row = [
         a.id_user,
         `"${(user?.first_name || '').replace(/"/g, '""')}"`,
         `"${(user?.last_name || '').replace(/"/g, '""')}"`,
-        `"${(user?.group_name || '').replace(/"/g, '""')}"`,
+        `"${cleanGroupName(user?.group_name).replace(/"/g, '""')}"`,
         user?.course || '',
         `"${new Date(a.submitted_at).toLocaleString('ru-RU')}"`,
       ];
       for (let i = 1; i <= 12; i++) {
-        row.push(`"${(a.answers[`q${i}`] || '').replace(/"/g, '""')}"`);
+        const ans = (a.answers[`q${i}`] || '').replace(/"/g, '""');
+        row.push(`"${ans}"`);
       }
       return row.join(';');
     });
+
     return '\uFEFF' + [headers.join(';'), ...rows].join('\r\n');
   }
 
@@ -467,7 +584,7 @@ class Database {
     const rows = this.data.feedbacks.map((f) => [
       f.id,
       `"${f.student_name}"`,
-      `"${f.group_name}"`,
+      `"${cleanGroupName(f.group_name)}"`,
       f.course,
       f.clean_days,
       f.relapse_days,
@@ -477,7 +594,9 @@ class Database {
     return '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\n');
   }
 
+  // Clear all student test data, questionnaires, trackers, and feedbacks, keeping only admin accounts
   public clearDatabase(): void {
+    // Retain only admin users (id_level === 2)
     let admins = this.data.users.filter((u) => u.id_level === 2);
     if (admins.length === 0) {
       admins = [
